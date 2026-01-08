@@ -116,12 +116,23 @@ onMounted(() => {
 
     <main v-if="!isLoading && cardLeft && cardRight">
       <div class="split-view">
-        <div class="card-wrapper">
-          <DobbleCard :card-data="cardLeft" card-id="left" @symbol-click="(t) => handleCardClick(t, 'left')" />
-        </div>
-        <div class="card-wrapper">
-          <DobbleCard :card-data="cardRight" card-id="right" @symbol-click="(t) => handleCardClick(t, 'right')" />
-        </div>
+        <TransitionGroup name="card-flip" tag="div" class="card-slot">
+          <div class="card-wrapper" :key="cardLeft.id">
+            <DobbleCard 
+              :card-data="cardLeft" 
+              @symbol-click="(t) => handleCardClick(t, 'left')" 
+            />
+          </div>
+        </TransitionGroup>
+
+        <TransitionGroup name="card-flip" tag="div" class="card-slot">
+          <div class="card-wrapper" :key="cardRight.id">
+            <DobbleCard 
+              :card-data="cardRight" 
+              @symbol-click="(t) => handleCardClick(t, 'right')" 
+            />
+          </div>
+        </TransitionGroup>
       </div>
     </main>
   </div>
@@ -141,16 +152,15 @@ body, html {
 .game-board {
   display: flex;
   flex-direction: column;
-  /* Use dvh (dynamic viewport height) to handle mobile browser bars correctly */
   height: 100dvh; 
   width: 100vw;
-  overflow: hidden; /* Prevent scrolling completely */
+  overflow: hidden;
   padding: 10px;
   box-sizing: border-box;
 }
 
 header {
-  flex: 0 0 auto; /* Header takes only the space it needs */
+  flex: 0 0 auto;
   text-align: center;
   margin-bottom: 10px;
 }
@@ -168,11 +178,11 @@ header {
 }
 
 main {
-  flex: 1; /* Takes all remaining vertical space */
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 0; /* CRITICAL: Allows flex container to shrink its children */
+  min-height: 0;
   width: 100%;
 }
 
@@ -186,31 +196,41 @@ main {
   align-items: center;
 }
 
-.card-wrapper {
+.card-slot {
   flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  /* Ensure the wrapper confines the card */
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
+  position: relative;
+}
+
+.card-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
   padding: 5px;
 }
 
 /* Mobile / Portrait Mode */
 @media (max-aspect-ratio: 1/1) or (max-width: 768px) {
   .split-view {
-    flex-direction: column; /* Stack cards vertically */
+    flex-direction: column;
   }
 }
 
 /* Loader Styles */
 .loader-overlay {
   position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
+  top: 0; 
+  left: 0;
+  width: 100vw; 
+  height: 100vh;
   background: #ffffff;
   display: flex;
   justify-content: center;
@@ -253,7 +273,7 @@ main {
   100% { transform: rotate(360deg); }
 }
 
-/* Transition Effect */
+/* Fade Transition */
 .fade-leave-active {
   transition: opacity 0.5s ease;
 }
@@ -261,10 +281,41 @@ main {
   opacity: 0;
 }
 
-/* Prevent text selection and context menus on game elements */
+/* Prevent text selection */
 .card-container, .card-image, .hitbox {
-  -webkit-touch-callout: none; /* iOS Safari */
-  -webkit-user-select: none;   /* Safari */
-  user-select: none;           /* Standard syntax */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Card Transition Effects */
+.card-flip-move {
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 10;
+}
+
+.card-flip-leave-active {
+  transition: all 0.5s ease-in;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
+
+.card-flip-leave-to {
+  opacity: 0;
+  transform: scale(0.3);
+}
+
+.card-flip-enter-active {
+  transition: all 0.5s ease-out;
+  transition-delay: 0.3s;
+}
+
+.card-flip-enter-from {
+  opacity: 0;
+  transform: translateY(30px) scale(0.9);
 }
 </style>
