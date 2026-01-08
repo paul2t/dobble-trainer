@@ -42,7 +42,7 @@ const preloadImages = async () => {
     setTimeout(() => {
       isLoading.value = false;
       initGame();
-    }, 500);
+    }, 100);
   } catch (err) {
     console.error("Failed to load images", err);
     message.value = "Error loading images. Please refresh.";
@@ -255,7 +255,7 @@ main {
 
 /* Transition Effect */
 .fade-leave-active {
-  transition: opacity 0.5s ease;
+  transition: opacity 0.1s ease;
 }
 .fade-leave-to {
   opacity: 0;
