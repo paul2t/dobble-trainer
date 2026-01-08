@@ -115,25 +115,21 @@ onMounted(() => {
     </header>
 
     <main v-if="!isLoading && cardLeft && cardRight">
-      <div class="split-view">
-        <TransitionGroup name="card-flip" tag="div" class="card-slot">
-          <div class="card-wrapper" :key="cardLeft.id">
-            <DobbleCard 
-              :card-data="cardLeft" 
-              @symbol-click="(t) => handleCardClick(t, 'left')" 
-            />
-          </div>
-        </TransitionGroup>
+      <TransitionGroup name="card-flip" tag="div" class="split-view">
+        <div class="card-wrapper" :key="cardLeft.id" data-position="left">
+          <DobbleCard 
+            :card-data="cardLeft" 
+            @symbol-click="(t) => handleCardClick(t, 'left')" 
+          />
+        </div>
 
-        <TransitionGroup name="card-flip" tag="div" class="card-slot">
-          <div class="card-wrapper" :key="cardRight.id">
-            <DobbleCard 
-              :card-data="cardRight" 
-              @symbol-click="(t) => handleCardClick(t, 'right')" 
-            />
-          </div>
-        </TransitionGroup>
-      </div>
+        <div class="card-wrapper" :key="cardRight.id" data-position="right">
+          <DobbleCard 
+            :card-data="cardRight" 
+            @symbol-click="(t) => handleCardClick(t, 'right')" 
+          />
+        </div>
+      </TransitionGroup>
     </main>
   </div>
 </template>
@@ -194,9 +190,10 @@ main {
   gap: 10px;
   justify-content: center;
   align-items: center;
+  position: relative;
 }
 
-.card-slot {
+.card-wrapper {
   flex: 1;
   display: flex;
   justify-content: center;
@@ -205,16 +202,8 @@ main {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  position: relative;
-}
-
-.card-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  height: 100%;
   padding: 5px;
+  box-sizing: border-box;
 }
 
 /* Mobile / Portrait Mode */
@@ -289,19 +278,31 @@ main {
 }
 
 /* Card Transition Effects */
+
+/* The card that slides to its new position */
 .card-flip-move {
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 10;
 }
 
+/* The card being replaced - shrinks and fades out */
 .card-flip-leave-active {
+  position: absolute !important;
   transition: all 0.5s ease-in;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
   z-index: 1;
+}
+
+/* Position the leaving card based on which side it was on */
+.card-flip-leave-active[data-position="left"] {
+  left: 0;
+  top: 0;
+  width: calc(50% - 5px);
+}
+
+.card-flip-leave-active[data-position="right"] {
+  right: 0;
+  top: 0;
+  width: calc(50% - 5px);
 }
 
 .card-flip-leave-to {
@@ -309,6 +310,7 @@ main {
   transform: scale(0.3);
 }
 
+/* The new card entering */
 .card-flip-enter-active {
   transition: all 0.5s ease-out;
   transition-delay: 0.3s;
@@ -317,5 +319,22 @@ main {
 .card-flip-enter-from {
   opacity: 0;
   transform: translateY(30px) scale(0.9);
+}
+
+/* Mobile adjustments for leaving cards */
+@media (max-aspect-ratio: 1/1) or (max-width: 768px) {
+  .card-flip-leave-active[data-position="left"] {
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: calc(50% - 5px);
+  }
+
+  .card-flip-leave-active[data-position="right"] {
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: calc(50% - 5px);
+  }
 }
 </style>
