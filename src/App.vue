@@ -1,67 +1,79 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import DobbleCard from './components/DobbleCard.vue';
 import rawData from './data/cards.json';
 
 // --- STATE ---
+const isLoading = ref(true);
+const loadingProgress = ref(0);
 const score = ref(0);
 const message = ref("Find the matching symbol!");
 const cardLeft = ref(null);
 const cardRight = ref(null);
 
-// Transform JSON object (card01, card02) into an Array for easier handling
-// We exclude the "types" key from the deck
+// Transform JSON into Array
 const deck = Object.keys(rawData)
   .filter(key => key !== 'types')
   .map(key => ({ ...rawData[key], id: key }));
 
-const allCards = ref(deck);
+// --- PRELOADING LOGIC ---
+const preloadImages = async () => {
+  const total = deck.length;
+  let loadedCount = 0;
+
+  const promises = deck.map((card) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      // Resolve the path correctly for Vite
+      img.src = new URL(`./assets/cards/${card.file}`, import.meta.url).href;
+      
+      img.onload = () => {
+        loadedCount++;
+        loadingProgress.value = Math.round((loadedCount / total) * 100);
+        resolve();
+      };
+      img.onerror = reject;
+    });
+  });
+
+  try {
+    await Promise.all(promises);
+    // Add a tiny delay for smoothness
+    setTimeout(() => {
+      isLoading.value = false;
+      initGame();
+    }, 500);
+  } catch (err) {
+    console.error("Failed to load images", err);
+    message.value = "Error loading images. Please refresh.";
+  }
+};
 
 // --- GAME LOGIC ---
-
 const getRandomCard = () => {
-  const randomIndex = Math.floor(Math.random() * allCards.value.length);
-  return allCards.value[randomIndex];
+  const randomIndex = Math.floor(Math.random() * deck.length);
+  return deck[randomIndex];
 };
 
 const initGame = () => {
-  // Pick two random initial cards
   let c1 = getRandomCard();
   let c2 = getRandomCard();
-  
-  // Ensure they aren't the same
-  while (c1.id === c2.id) {
-    c2 = getRandomCard();
-  }
-  
+  while (c1.id === c2.id) { c2 = getRandomCard(); }
   cardLeft.value = c1;
   cardRight.value = c2;
-  score.value = 0;
-};
-
-// Check if the two currently displayed cards have this symbol type
-const validateMatch = (clickedType) => {
-  // Find symbols on both cards
-  const leftHasIt = cardLeft.value.symbols.some(s => s.type === clickedType);
-  const rightHasIt = cardRight.value.symbols.some(s => s.type === clickedType);
-
-  return leftHasIt && rightHasIt;
 };
 
 const handleCardClick = (clickedType, side) => {
-  if (validateMatch(clickedType)) {
-    // 1. Increment Score
-    score.value++;
-    message.value = "Nice match! +1 Point";
+  const leftHasIt = cardLeft.value.symbols.some(s => s.type === clickedType);
+  const rightHasIt = cardRight.value.symbols.some(s => s.type === clickedType);
 
-    // 2. Perform the Swap Logic
-    // Logic: "The card I clicked is replaced by the other one, 
-    // and the other one is replaced by another random card."
+  if (leftHasIt && rightHasIt) {
+    score.value++;
+    message.value = "Nice match!";
     
     const otherCard = side === 'left' ? cardRight.value : cardLeft.value;
     const newRandom = getRandomCard();
 
-    // The clicked slot gets the "other" card
     if (side === 'left') {
       cardLeft.value = otherCard;
       cardRight.value = newRandom;
@@ -69,24 +81,32 @@ const handleCardClick = (clickedType, side) => {
       cardRight.value = otherCard;
       cardLeft.value = newRandom;
     }
-
   } else {
-    // Wrong click
-    message.value = "Ouch! No match there.";
-    score.value = Math.max(0, score.value - 1); // Optional penalty
+    message.value = "No match there!";
   }
 };
 
-// Start game on load
 onMounted(() => {
-  initGame();
+  preloadImages();
 });
-
 </script>
 
 <template>
   <div class="game-board">
-    <header>
+    <Transition name="fade">
+      <div v-if="isLoading" class="loader-overlay">
+        <div class="loader-content">
+          <div class="spinner"></div>
+          <h2>Loading Cards...</h2>
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: loadingProgress + '%' }"></div>
+          </div>
+          <p>{{ loadingProgress }}%</p>
+        </div>
+      </div>
+    </Transition>
+
+    <header v-if="!isLoading">
       <h1>Dobble Trainer</h1>
       <div class="stats">
         <span class="score">Score: {{ score }}</span>
@@ -94,25 +114,14 @@ onMounted(() => {
       </div>
     </header>
 
-    <main v-if="cardLeft && cardRight">
+    <main v-if="!isLoading && cardLeft && cardRight">
       <div class="split-view">
-        
         <div class="card-wrapper">
-          <DobbleCard 
-            :card-data="cardLeft" 
-            :card-id="cardLeft.id"
-            @symbol-click="(type) => handleCardClick(type, 'left')"
-          />
+          <DobbleCard :card-data="cardLeft" card-id="left" @symbol-click="(t) => handleCardClick(t, 'left')" />
         </div>
-
         <div class="card-wrapper">
-          <DobbleCard 
-            :card-data="cardRight" 
-            :card-id="cardRight.id"
-            @symbol-click="(type) => handleCardClick(type, 'right')"
-          />
+          <DobbleCard :card-data="cardRight" card-id="right" @symbol-click="(t) => handleCardClick(t, 'right')" />
         </div>
-
       </div>
     </main>
   </div>
@@ -195,5 +204,60 @@ main {
   .split-view {
     flex-direction: column; /* Stack cards vertically */
   }
+}
+
+/* Loader Styles */
+.loader-overlay {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: #ffffff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.loader-content {
+  text-align: center;
+  width: 300px;
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid #f3f3f3;
+  border-top: 5px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 20px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 10px;
+  background: #eee;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-top: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #3498db;
+  transition: width 0.3s ease;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Transition Effect */
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
