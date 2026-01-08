@@ -260,4 +260,11 @@ main {
 .fade-leave-to {
   opacity: 0;
 }
+
+/* Prevent text selection and context menus on game elements */
+.card-container, .card-image, .hitbox {
+  -webkit-touch-callout: none; /* iOS Safari */
+  -webkit-user-select: none;   /* Safari */
+  user-select: none;           /* Standard syntax */
+}
 </style>

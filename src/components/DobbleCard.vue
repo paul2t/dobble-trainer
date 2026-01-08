@@ -80,9 +80,21 @@ const getImageUrl = (filename) => {
   cursor: pointer;
   z-index: 10;
   border-radius: 50%;
+  /* Remove default mobile tap highlight color */
+  -webkit-tap-highlight-color: transparent; 
 }
 
-.hitbox:hover {
-  background-color: rgba(255, 255, 0, 0.2);
+/* Only apply hover effects on devices that support hover (Mouse) */
+@media (hover: hover) {
+  .hitbox:hover {
+    background-color: rgba(255, 255, 0, 0.2);
+  }
+}
+
+/* Apply a "pressed" effect on both touch and click */
+.hitbox:active {
+  background-color: rgba(255, 255, 0, 0.4);
+  transform: scale(1.1);
+  transition: transform 0.1s;
 }
 </style>
