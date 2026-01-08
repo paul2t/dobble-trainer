@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, nextTick } from 'vue';
 import DobbleCard from './components/DobbleCard.vue';
 import rawData from './data/cards.json';
 
@@ -10,6 +10,16 @@ const score = ref(0);
 const message = ref("Find the matching symbol!");
 const cardLeft = ref(null);
 const cardRight = ref(null);
+
+// Animation states
+const animatingCard = ref(null);
+const animationDirection = ref(null);
+const isAnimating = ref(false);
+const animationStyle = ref({}); // For positioning the card exactly
+
+// Refs for the wrappers
+const leftCardWrapper = ref(null);
+const rightCardWrapper = ref(null);
 
 // Transform JSON into Array
 const deck = Object.keys(rawData)
@@ -24,9 +34,8 @@ const preloadImages = async () => {
   const promises = deck.map((card) => {
     return new Promise((resolve, reject) => {
       const img = new Image();
-      // Resolve the path correctly for Vite
       img.src = new URL(`./assets/cards/${card.file}`, import.meta.url).href;
-      
+
       img.onload = () => {
         loadedCount++;
         loadingProgress.value = Math.round((loadedCount / total) * 100);
@@ -38,7 +47,6 @@ const preloadImages = async () => {
 
   try {
     await Promise.all(promises);
-    // Add a tiny delay for smoothness
     setTimeout(() => {
       isLoading.value = false;
       initGame();
@@ -63,27 +71,69 @@ const initGame = () => {
   cardRight.value = c2;
 };
 
-const handleCardClick = (clickedType, side) => {
+const handleCardClick = async (clickedType, side) => {
+  if (isAnimating.value) return;
+
   const leftHasIt = cardLeft.value.symbols.some(s => s.type === clickedType);
   const rightHasIt = cardRight.value.symbols.some(s => s.type === clickedType);
 
   if (leftHasIt && rightHasIt) {
     score.value++;
     message.value = "Nice match!";
-    
+
+    isAnimating.value = true;
+    // const clickedCard = side === 'left' ? cardLeft.value : cardRight.value;
     const otherCard = side === 'left' ? cardRight.value : cardLeft.value;
-    const newRandom = getRandomCard();
+
+    animatingCard.value = otherCard;
+    animationDirection.value = side === 'right' ? 'left-to-right' : 'right-to-left';
+
+    // Computer the exact position of the source card
+    await nextTick();
+    const sourceWrapper = side === 'right' ? leftCardWrapper.value : rightCardWrapper.value;
+    const targetWrapper = side === 'right' ? rightCardWrapper.value : leftCardWrapper.value;
+
+    if (sourceWrapper && targetWrapper) {
+      const sourceRect = sourceWrapper.getBoundingClientRect();
+      const targetRect = targetWrapper.getBoundingClientRect();
+
+      animationStyle.value = {
+        '--start-x': `${sourceRect.left}px`,
+        '--start-y': `${sourceRect.top}px`,
+        '--start-width': `${sourceRect.width}px`,
+        '--start-height': `${sourceRect.height}px`,
+        '--end-x': `${targetRect.left}px`,
+        '--end-y': `${targetRect.top}px`,
+      };
+    }
+
+    // show the new card
+    let newRandom = getRandomCard();
     while (newRandom.id === cardLeft.value.id || newRandom.id === cardRight.value.id) {
       newRandom = getRandomCard();
     }
 
     if (side === 'left') {
-      cardLeft.value = otherCard;
       cardRight.value = newRandom;
     } else {
-      cardRight.value = otherCard;
       cardLeft.value = newRandom;
     }
+
+    // wait until the animation is over
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Update the other card position
+    if (side === 'left') {
+      cardLeft.value = otherCard;
+    } else {
+      cardRight.value = otherCard;
+    }
+
+    // Reset animation states
+    animatingCard.value = null;
+    animationDirection.value = null;
+    isAnimating.value = false;
+    animationStyle.value = {};
   } else {
     message.value = "No match there!";
   }
@@ -119,11 +169,38 @@ onMounted(() => {
 
     <main v-if="!isLoading && cardLeft && cardRight">
       <div class="split-view">
-        <div class="card-wrapper">
-          <DobbleCard :card-data="cardLeft" card-id="left" @symbol-click="(t) => handleCardClick(t, 'left')" />
+        <div
+          ref="leftCardWrapper"
+          class="card-wrapper"
+          :class="{ 'card-hidden': animationDirection === 'left-to-right' }"
+        >
+          <DobbleCard
+            :card-data="cardLeft"
+            card-id="left"
+            @symbol-click="(t) => handleCardClick(t, 'left')"
+          />
         </div>
-        <div class="card-wrapper">
-          <DobbleCard :card-data="cardRight" card-id="right" @symbol-click="(t) => handleCardClick(t, 'right')" />
+        <div
+          ref="rightCardWrapper"
+          class="card-wrapper"
+          :class="{ 'card-hidden': animationDirection === 'right-to-left' }"
+        >
+          <DobbleCard
+            :card-data="cardRight"
+            card-id="right"
+            @symbol-click="(t) => handleCardClick(t, 'right')"
+          />
+        </div>
+      </div>
+
+      <!-- Carte en animation avec position calculée -->
+      <div
+        v-if="animatingCard"
+        class="animating-card-overlay"
+        :style="animationStyle"
+      >
+        <div class="animating-card-content">
+          <DobbleCard :card-data="animatingCard" card-id="animating" />
         </div>
       </div>
     </main>
@@ -132,28 +209,27 @@ onMounted(() => {
 
 <style>
 /* Global Resets */
-body, html { 
-  margin: 0; 
+body, html {
+  margin: 0;
   padding: 0;
   width: 100%;
   height: 100%;
-  background: #f0f2f5; 
-  font-family: sans-serif; 
+  background: #f0f2f5;
+  font-family: sans-serif;
 }
 
 .game-board {
   display: flex;
   flex-direction: column;
-  /* Use dvh (dynamic viewport height) to handle mobile browser bars correctly */
-  height: 100dvh; 
+  height: 100dvh;
   width: 100vw;
-  overflow: hidden; /* Prevent scrolling completely */
+  overflow: hidden;
   padding: 10px;
   box-sizing: border-box;
 }
 
 header {
-  flex: 0 0 auto; /* Header takes only the space it needs */
+  flex: 0 0 auto;
   text-align: center;
   margin-bottom: 10px;
 }
@@ -171,12 +247,13 @@ header {
 }
 
 main {
-  flex: 1; /* Takes all remaining vertical space */
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 0; /* CRITICAL: Allows flex container to shrink its children */
+  min-height: 0;
   width: 100%;
+  position: relative; /* Important pour le positionnement absolu */
 }
 
 .split-view {
@@ -194,18 +271,51 @@ main {
   display: flex;
   justify-content: center;
   align-items: center;
-  /* Ensure the wrapper confines the card */
   width: 100%;
   height: 100%;
   min-width: 0;
   min-height: 0;
   padding: 5px;
+  transition: opacity 0.2s ease;
+}
+
+/* Carte en animation - Positionnement absolu calculé */
+.animating-card-overlay {
+  position: fixed;
+  top: var(--start-y);
+  left: var(--start-x);
+  width: var(--start-width);
+  height: var(--start-height);
+  pointer-events: none;
+  z-index: 1000;
+  will-change: transform;
+  animation: slideCard 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animating-card-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+@keyframes slideCard {
+  0% {
+    transform: translate(0, 0);
+  }
+  100% {
+    transform: translate(
+      calc(var(--end-x) - var(--start-x)),
+      calc(var(--end-y) - var(--start-y))
+    );
+  }
 }
 
 /* Mobile / Portrait Mode */
 @media (max-aspect-ratio: 1/1) or (max-width: 768px) {
   .split-view {
-    flex-direction: column; /* Stack cards vertically */
+    flex-direction: column;
   }
 }
 
@@ -258,16 +368,16 @@ main {
 
 /* Transition Effect */
 .fade-leave-active {
-  transition: opacity 0.1s ease;
+  transition: opacity 0.3s ease;
 }
 .fade-leave-to {
   opacity: 0;
 }
 
-/* Prevent text selection and context menus on game elements */
+/* Prevent text selection */
 .card-container, .card-image, .hitbox {
-  -webkit-touch-callout: none; /* iOS Safari */
-  -webkit-user-select: none;   /* Safari */
-  user-select: none;           /* Standard syntax */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 </style>
