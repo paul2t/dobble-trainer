@@ -290,6 +290,9 @@ main {
   position: absolute !important;
   transition: all 0.5s ease-in;
   z-index: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 /* Position the leaving card based on which side it was on */
@@ -297,12 +300,16 @@ main {
   left: 0;
   top: 0;
   width: calc(50% - 5px);
+  height: 100%;
+  padding: 5px;
 }
 
 .card-flip-leave-active[data-position="right"] {
   right: 0;
   top: 0;
   width: calc(50% - 5px);
+  height: 100%;
+  padding: 5px;
 }
 
 .card-flip-leave-to {
@@ -326,13 +333,16 @@ main {
   .card-flip-leave-active[data-position="left"] {
     left: 0;
     top: 0;
+    right: 0;
     width: 100%;
     height: calc(50% - 5px);
   }
 
   .card-flip-leave-active[data-position="right"] {
     left: 0;
+    right: 0;
     bottom: 0;
+    top: auto;
     width: 100%;
     height: calc(50% - 5px);
   }
