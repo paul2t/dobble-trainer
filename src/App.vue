@@ -11,7 +11,6 @@ const { isLoading, loadingProgress, deck, preloadImages } = useGameAssets();
 // --- STATE ---
 const score = ref(0);
 const scoreUnPaused = ref(0);
-const message = ref("Find the matching symbol!");
 const cardLeft = ref(null);
 const cardRight = ref(null);
 const mistakes = ref(0);
@@ -54,6 +53,44 @@ const triggerShake = () => {
   }, 300); // Duration of the animation
 };
 
+
+const triggerMove = async (cardToAnimate, side, leftCardWrapper, rightCardWrapper) => {
+  isAnimating.value = true;
+  animatingCard.value = cardToAnimate;
+  animationDirection.value = side === 'left' ? 'left-to-right' : 'right-to-left';
+  const sourceRef = side === 'left' ? leftCardWrapper.value : rightCardWrapper.value;
+  const targetRef = side === 'left' ? rightCardWrapper.value : leftCardWrapper.value;
+
+  await nextTick();
+
+  if (sourceRef && targetRef) {
+    const sourceRect = sourceRef.getBoundingClientRect();
+    const targetRect = targetRef.getBoundingClientRect();
+
+    animationStyle.value = {
+      '--start-x': `${sourceRect.left}px`,
+      '--start-y': `${sourceRect.top}px`,
+      '--start-width': `${sourceRect.width}px`,
+      '--start-height': `${sourceRect.height}px`,
+      '--end-x': `${targetRect.left}px`,
+      '--end-y': `${targetRect.top}px`,
+    };
+  }
+
+  // Wait for the CSS animation duration (0.3s)
+  await new Promise(resolve => setTimeout(resolve, 300));
+
+  // Reset animation states
+  const result = animatingCard.value;
+  animatingCard.value = null;
+  animationDirection.value = null;
+  isAnimating.value = false;
+  animationStyle.value = {};
+  
+  return result; // Return the card so the logic knows it's safe to finish the swap
+};
+
+
 const handleCardClick = async (clickedType, side) => {
   if (isAnimating.value) return;
 
@@ -65,35 +102,11 @@ const handleCardClick = async (clickedType, side) => {
     score.value++;
     if (!isPaused.value)
       scoreUnPaused.value++;
-    message.value = "Nice match!";
-
-    isAnimating.value = true;
+    
     const clickedCard = side === 'left' ? cardLeft.value : cardRight.value;
-    const otherCard = side === 'left' ? cardRight.value : cardLeft.value;
 
-    animatingCard.value = clickedCard;
-    animationDirection.value = side === 'left' ? 'left-to-right' : 'right-to-left';
+    const animating = triggerMove(clickedCard, side, leftCardWrapper, rightCardWrapper);
 
-    // Computer the exact position of the source card
-    await nextTick();
-    const sourceWrapper = side === 'left' ? leftCardWrapper.value : rightCardWrapper.value;
-    const targetWrapper = side === 'left' ? rightCardWrapper.value : leftCardWrapper.value;
-
-    if (sourceWrapper && targetWrapper) {
-      const sourceRect = sourceWrapper.getBoundingClientRect();
-      const targetRect = targetWrapper.getBoundingClientRect();
-
-      animationStyle.value = {
-        '--start-x': `${sourceRect.left}px`,
-        '--start-y': `${sourceRect.top}px`,
-        '--start-width': `${sourceRect.width}px`,
-        '--start-height': `${sourceRect.height}px`,
-        '--end-x': `${targetRect.left}px`,
-        '--end-y': `${targetRect.top}px`,
-      };
-    }
-
-    // show the new card
     let newRandom = getRandomCard();
     while (newRandom.id === cardLeft.value.id || newRandom.id === cardRight.value.id) {
       newRandom = getRandomCard();
@@ -105,8 +118,7 @@ const handleCardClick = async (clickedType, side) => {
       cardRight.value = newRandom;
     }
 
-    // wait until the animation is over
-    await new Promise(resolve => setTimeout(resolve, 300));
+    await animating;
 
     // Update the other card position
     if (side === 'left') {
@@ -114,15 +126,8 @@ const handleCardClick = async (clickedType, side) => {
     } else {
       cardLeft.value = clickedCard;
     }
-
-    // Reset animation states
-    animatingCard.value = null;
-    animationDirection.value = null;
-    isAnimating.value = false;
-    animationStyle.value = {};
   } else {
     mistakes.value++;
-    message.value = "No match there!";
     triggerShake();
   }
 };
@@ -148,7 +153,6 @@ onMounted(async () => {
           :elapsed-ms="totalElapsedMs"
           @toggle-pause="toggleTimer"
         />
-        <!-- <span class="msg">{{ message }}</span> -->
       </div>
     </header>
 
