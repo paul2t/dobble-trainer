@@ -60,7 +60,10 @@ const preloadImages = async () => {
 // --- GAME LOGIC ---
 const getRandomCard = () => {
   const randomIndex = Math.floor(Math.random() * deck.length);
-  return deck[randomIndex];
+  return {
+    ...deck[randomIndex],
+    rotation: Math.floor(Math.random() * 360),
+  };
 };
 
 const initGame = () => {

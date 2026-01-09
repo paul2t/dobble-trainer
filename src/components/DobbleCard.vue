@@ -33,7 +33,10 @@ const getImageUrl = (filename) => {
 </script>
 
 <template>
-  <div class="card-container">
+  <div 
+    class="card-container" 
+    :style="{ transform: `rotate(${cardData.rotation}deg)` }"
+  >
     <img 
       :src="getImageUrl(cardData.file)" 
       class="card-image" 
@@ -46,8 +49,7 @@ const getImageUrl = (filename) => {
       class="hitbox"
       :style="getStyle(symbol.bounding_box)"
       @click.stop="emit('symbol-click', symbol.type)"
-    >
-      </div>
+    ></div>
   </div>
 </template>
 
