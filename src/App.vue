@@ -219,7 +219,7 @@ onUnmounted(() => {
     </Transition>
 
     <header v-if="!isLoading">
-      <h1>Dobble Trainer</h1>
+      <!-- <h1>Dobble Trainer</h1> -->
       <div class="stats">
         <div class="stats-bar">
           <div class="stat-item">
