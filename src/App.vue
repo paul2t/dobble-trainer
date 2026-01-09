@@ -10,8 +10,6 @@ const score = ref(0);
 const message = ref("Find the matching symbol!");
 const cardLeft = ref(null);
 const cardRight = ref(null);
-const startTime = ref(null);
-const currentTime = ref(null);
 const mistakes = ref(0);
 const isShaking = ref(false);
 
@@ -76,20 +74,34 @@ const getRandomCard = () => {
   };
 };
 
+const isPaused = ref(true);
+const accumulatedTime = ref(0);
+const startTime = ref(null);
+const currentTime = ref(null);
+let timerInterval = null;
+
 // Calculate Cards Per Minute (CPM)
 const cardsPerMinute = computed(() => {
-  if (!startTime.value || !currentTime.value || score.value === 0) return 0;
+  // 1. Calculate total elapsed milliseconds exactly like the timer does
+  let totalMs = accumulatedTime.value;
+  if (!isPaused.value && startTime.value && currentTime.value) {
+    totalMs += (currentTime.value - startTime.value);
+  }
+
+  // 2. Prevent division by zero or calculation if no time/matches yet
+  // Wait 3 seconds for a stable reading
+  if (totalMs < 3000 || score.value === 0) return 0;
+
+  // 3. Convert ms to minutes
+  const totalMinutes = totalMs / 1000 / 60;
   
-  const elapsedSeconds = (currentTime.value - startTime.value) / 1000;
-  if (elapsedSeconds < 3) return 0; // Wait 3 seconds for a stable reading
-  
-  const elapsedMinutes = elapsedSeconds / 60;
-  return (score.value / elapsedMinutes).toFixed(1);
+  // 4. Return CPM (Matches / Minutes)
+  return (score.value / totalMinutes).toFixed(1);
 });
 
-let timerInterval = null;
 // Timer update function
 const startTimer = () => {
+  currentTime.value = Date.now();
   startTime.value = Date.now();
   if (timerInterval) clearInterval(timerInterval);
 
@@ -98,11 +110,36 @@ const startTimer = () => {
   }, 1000); // Update every 100ms for a smooth counter
 };
 
+const toggleTimer = () => {
+  if (isLoading.value) return; // Don't allow pausing during load
+
+  isPaused.value = !isPaused.value;
+
+  if (isPaused.value) {
+    // PAUSING: Stop the interval and save the elapsed time
+    clearInterval(timerInterval);
+    accumulatedTime.value += Date.now() - startTime.value;
+    startTime.value = null;
+    console.log("accumulatedTime.value", accumulatedTime.value);
+  } else {
+    // RESUMING: Start a new reference point
+    startTimer();
+  }
+};
+
 const formatTime = computed(() => {
-  if (!startTime.value || !currentTime.value) return "00:00";
-  const seconds = Math.floor((currentTime.value - startTime.value) / 1000);
+  let totalMs = accumulatedTime.value;
+  console.log("totalMs",totalMs);
+  if (!isPaused.value && startTime.value && currentTime.value) {
+    totalMs += (currentTime.value - startTime.value);
+    console.log("totalMs",totalMs, startTime.value);
+  }
+  
+  const seconds = Math.floor(totalMs / 1000);
+  console.log(seconds);
   const m = Math.floor(seconds / 60).toString().padStart(2, '0');
   const s = (seconds % 60).toString().padStart(2, '0');
+  console.log(m, s);
   return `${m}:${s}`;
 });
 
@@ -238,9 +275,9 @@ onUnmounted(() => {
             <span class="label">MISTAKES</span>
             <span class="value error-text">{{ mistakes }}</span>
           </div>
-          <div class="stat-item">
+          <div class="stat-item clickable" @click="toggleTimer">
             <span class="label">TIME</span>
-            <span class="value">{{ formatTime }}</span>
+            <span class="value timer-display">{{ formatTime }}</span>
           </div>
         </div>
         <!-- <span class="msg">{{ message }}</span> -->
@@ -470,6 +507,7 @@ main {
   border-radius: 12px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.05);
   margin-bottom: 10px;
+  user-select: none;
 }
 
 .stat-item {
@@ -515,4 +553,18 @@ small {
   30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
   40%, 60% { transform: translate3d(4px, 0, 0); }
 }
+
+.clickable {
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.clickable:hover {
+  opacity: 0.7;
+}
+
+.timer-display {
+  font-family: monospace; /* Keeps numbers from jumping */
+  color: #3498db;
+}
+
 </style>
