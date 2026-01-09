@@ -35,8 +35,8 @@ const accuracy = computed(() => {
 <template>
     <div class="stats-bar clickable" @click="emit('toggle-pause')">
         <div class="stat-item" v-if="!isPaused || elapsedMs > 0" >
-            <span class="label">SPEED</span>
-            <span class="value">{{ cardsPerMinute }} <small>CPM</small></span>
+            <span class="label">CPM</span>
+            <span class="value">{{ cardsPerMinute }}</span>
         </div>
         <div class="stat-item">
             <span class="label">ACCURACY</span>
