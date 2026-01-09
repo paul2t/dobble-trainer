@@ -73,6 +73,9 @@ const handleCardClick = (clickedType, side) => {
     
     const otherCard = side === 'left' ? cardRight.value : cardLeft.value;
     const newRandom = getRandomCard();
+    while (newRandom.id === cardLeft.value.id || newRandom.id === cardRight.value.id) {
+      newRandom = getRandomCard();
+    }
 
     if (side === 'left') {
       cardLeft.value = otherCard;
