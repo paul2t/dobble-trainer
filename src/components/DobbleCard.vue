@@ -99,4 +99,14 @@ const getImageUrl = (filename) => {
   transform: scale(1.1);
   transition: transform 0.1s;
 }
+
+/* Prevent text selection */
+.card-container,
+.card-image,
+.hitbox {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
 </style>

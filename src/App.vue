@@ -3,91 +3,24 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import DobbleCard from './components/DobbleCard.vue';
 import StatsBar from './components/StatsBar.vue';
 import { useTimer } from './composables/useTimer';
-import rawData from './data/cards.json';
+import { useGameAssets } from './composables/useGameAssets';
+import { useGameLogic } from './composables/useGameLogic';
+import { useCardAnimation } from './composables/useCardAnimation';
+import GameLoader from './components/GameLoader.vue';
+import AnimationOverlay from './components/AnimationOverlay.vue';
 
-// --- STATE ---
-const isLoading = ref(true);
-const loadingProgress = ref(0);
-const score = ref(0);
-const scoreUnPaused = ref(0);
-const message = ref("Find the matching symbol!");
-const cardLeft = ref(null);
-const cardRight = ref(null);
-const mistakes = ref(0);
-const isShaking = ref(false);
 
-// Animation states
-const animatingCard = ref(null);
-const animationDirection = ref(null);
-const isAnimating = ref(false);
-const animationStyle = ref({}); // For positioning the card exactly
+// 1. Assets
+const { isLoading, loadingProgress, preloadImages } = useGameAssets();
 
-// Refs for the wrappers
-const leftCardWrapper = ref(null);
-const rightCardWrapper = ref(null);
+// 2. Logic
+const { cardLeft, cardRight, score, scoreUnPaused, mistakes, initGame, handleMatch, getRandomCard } = useGameLogic();
 
-// Transform JSON into Array
-const deck = Object.keys(rawData)
-  .filter(key => key !== 'types')
-  .map(key => ({ ...rawData[key], id: key }));
+// 3. Time
+const { totalElapsedMs, isPaused, toggleTimer } = useTimer();
 
-// --- PRELOADING LOGIC ---
-const preloadImages = async () => {
-  const total = deck.length;
-  let loadedCount = 0;
-
-  const promises = deck.map((card) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = new URL(`./assets/cards/${card.file}`, import.meta.url).href;
-
-      img.onload = () => {
-        loadedCount++;
-        loadingProgress.value = Math.round((loadedCount / total) * 100);
-        resolve();
-      };
-      img.onerror = reject;
-    });
-  });
-
-  try {
-    await Promise.all(promises);
-    setTimeout(() => {
-      isLoading.value = false;
-      initGame();
-    }, 100);
-  } catch (err) {
-    console.error("Failed to load images", err);
-    message.value = "Error loading images. Please refresh.";
-  }
-};
-
-// --- Timer Management ---
-const { isPaused, totalElapsedMs, toggleTimer, stopTimer } = useTimer();
-
-// --- GAME LOGIC ---
-const getRandomCard = () => {
-  const randomIndex = Math.floor(Math.random() * deck.length);
-  return {
-    ...deck[randomIndex],
-    rotation: Math.floor(Math.random() * 360),
-  };
-};
-
-const initGame = () => {
-  let c1 = getRandomCard();
-  let c2 = getRandomCard();
-  while (c1.id === c2.id) { c2 = getRandomCard(); }
-  cardLeft.value = c1;
-  cardRight.value = c2;
-};
-
-const triggerShake = () => {
-  isShaking.value = true;
-  setTimeout(() => {
-    isShaking.value = false;
-  }, 300); // Duration of the animation
-};
+// 4. Animation logic stays here or in its own helper
+const { isAnimating, triggerMove, animatingCard, animationDirection, animationStyle } = useCardAnimation();
 
 const handleCardClick = async (clickedType, side) => {
   if (isAnimating.value) return;
@@ -100,9 +33,9 @@ const handleCardClick = async (clickedType, side) => {
     score.value++;
     if (!isPaused.value)
       scoreUnPaused.value++;
-    message.value = "Nice match!";
+    // message.value = "Nice match!";
 
-    isAnimating.value = true;
+        isAnimating.value = true;
     const clickedCard = side === 'left' ? cardLeft.value : cardRight.value;
     const otherCard = side === 'left' ? cardRight.value : cardLeft.value;
 
@@ -157,93 +90,95 @@ const handleCardClick = async (clickedType, side) => {
     animationStyle.value = {};
   } else {
     mistakes.value++;
-    message.value = "No match there!";
+    // message.value = "No match there!";
     triggerShake();
   }
 };
 
-onMounted(() => {
-  preloadImages();
+// const handleCardClick = async (type, side) => {
+//   if (isAnimating.value) return;
+
+//   // handleMatch(type, side, isPaused, leftCardWrapper, rightCardWrapper, isShaking);
+
+//   const newCard = handleMatch(type, side, isPaused);
+//   console.log("new card", newCard);
+
+//   if (newCard) {
+//     const clickedCard = side === 'left' ? cardLeft.value : cardRight.value;
+
+//     // 2. Prepare the swap (update the "new" random card immediately)
+//     if (side === 'left') cardLeft.value = newCard;
+//     else cardRight.value = newCard;
+
+//     // 3. Run the visual animation
+//     // We pass the actual DOM elements (refs) to the composable
+//     await triggerMove(
+//       clickedCard,
+//       side,
+//       side === 'left' ? leftCardWrapper.value : rightCardWrapper.value,
+//       side === 'left' ? rightCardWrapper.value : leftCardWrapper.value
+//     );
+
+//     // 4. Finalize the swap: the moving card becomes the new "static" card on the other side
+//     if (side === 'left') cardRight.value = clickedCard;
+//     else cardLeft.value = clickedCard;
+
+//   } else {
+//     triggerShake();
+//   }
+// };
+
+// --- STATE ---
+const isShaking = ref(false);
+
+// Refs for the wrappers
+const leftCardWrapper = ref(null);
+const rightCardWrapper = ref(null);
+
+// --- GAME LOGIC ---
+
+const triggerShake = () => {
+  isShaking.value = true;
+  setTimeout(() => {
+    isShaking.value = false;
+  }, 300); // Duration of the animation
+};
+
+onMounted(async () => {
+  await preloadImages();
+  initGame();
 });
 
-onUnmounted(() => {
-  stopTimer();
-});
 </script>
 
 <template>
   <div class="game-board">
-    <Transition name="fade">
-      <div v-if="isLoading" class="loader-overlay">
-        <div class="loader-content">
-          <div class="spinner"></div>
-          <h2>Loading Cards...</h2>
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: loadingProgress + '%' }"></div>
+    <GameLoader :loading-progress="loadingProgress" :is-loading="isLoading" />
+    <template v-if="!isLoading" >
+      <StatsBar :score="score" :score-un-paused="scoreUnPaused" :mistakes="mistakes" :is-paused="isPaused"
+        :elapsed-ms="totalElapsedMs" @toggle-pause="toggleTimer" />
+
+      <main v-if="cardLeft && cardRight">
+        <div class="split-view" :class="{ 'shake-animation': isShaking }">
+          <div ref="leftCardWrapper" class="card-wrapper"
+            :class="{ 'card-hidden': animationDirection === 'left-to-right' }">
+            <DobbleCard :card-data="cardLeft" card-id="left" @symbol-click="(t) => handleCardClick(t, 'left')" />
           </div>
-          <p>{{ loadingProgress }}%</p>
+          <div ref="rightCardWrapper" class="card-wrapper"
+            :class="{ 'card-hidden': animationDirection === 'right-to-left' }">
+            <DobbleCard :card-data="cardRight" card-id="right" @symbol-click="(t) => handleCardClick(t, 'right')" />
+          </div>
         </div>
-      </div>
-    </Transition>
-
-    <header v-if="!isLoading">
-      <!-- <h1>Dobble Trainer</h1> -->
-      <div class="stats">
-        <StatsBar 
-          :score="score"
-          :score-un-paused="scoreUnPaused"
-          :mistakes="mistakes"
-          :is-paused="isPaused"
-          :elapsed-ms="totalElapsedMs"
-          @toggle-pause="toggleTimer"
-        />
-        <!-- <span class="msg">{{ message }}</span> -->
-      </div>
-    </header>
-
-    <main v-if="!isLoading && cardLeft && cardRight">
-      <div class="split-view" :class="{ 'shake-animation': isShaking }">
-        <div
-          ref="leftCardWrapper"
-          class="card-wrapper"
-          :class="{ 'card-hidden': animationDirection === 'left-to-right' }"
-        >
-          <DobbleCard
-            :card-data="cardLeft"
-            card-id="left"
-            @symbol-click="(t) => handleCardClick(t, 'left')"
-          />
-        </div>
-        <div
-          ref="rightCardWrapper"
-          class="card-wrapper"
-          :class="{ 'card-hidden': animationDirection === 'right-to-left' }"
-        >
-          <DobbleCard
-            :card-data="cardRight"
-            card-id="right"
-            @symbol-click="(t) => handleCardClick(t, 'right')"
-          />
-        </div>
-      </div>
-
-      <!-- Carte en animation avec position calculée -->
-      <div
-        v-if="animatingCard"
-        class="animating-card-overlay"
-        :style="animationStyle"
-      >
-        <div class="animating-card-content">
-          <DobbleCard :card-data="animatingCard" card-id="animating" />
-        </div>
-      </div>
-    </main>
+        <AnimationOverlay v-if="isAnimating" :animation-direction="animationDirection" :animating-card="animatingCard" />
+      </main>
+    </template>
   </div>
 </template>
 
 <style>
 /* Global Resets */
-body, html {
+body,
+html {
   margin: 0;
   padding: 0;
   width: 100%;
@@ -262,17 +197,6 @@ body, html {
   box-sizing: border-box;
 }
 
-header {
-  flex: 0 0 auto;
-  text-align: center;
-  margin-bottom: 10px;
-}
-
-.msg {
-  color: #666;
-  font-size: 0.9rem;
-}
-
 main {
   flex: 1;
   display: flex;
@@ -280,7 +204,8 @@ main {
   align-items: center;
   min-height: 0;
   width: 100%;
-  position: relative; /* Important pour le positionnement absolu */
+  position: relative;
+  /* Important pour le positionnement absolu */
 }
 
 .split-view {
@@ -305,6 +230,44 @@ main {
   padding: 5px;
   transition: opacity 0.2s ease;
 }
+
+/* Mobile / Portrait Mode */
+@media (max-aspect-ratio: 1/1) or (max-width: 768px) {
+  .split-view {
+    flex-direction: column;
+  }
+}
+
+.shake-animation {
+  animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
+}
+
+@keyframes shake {
+
+  10%,
+  90% {
+    transform: translate3d(-1px, 0, 0);
+  }
+
+  20%,
+  80% {
+    transform: translate3d(2px, 0, 0);
+  }
+
+  30%,
+  50%,
+  70% {
+    transform: translate3d(-4px, 0, 0);
+  }
+
+  40%,
+  60% {
+    transform: translate3d(4px, 0, 0);
+  }
+}
+
+
+
 
 /* Carte en animation - Positionnement absolu calculé */
 .animating-card-overlay {
@@ -331,92 +294,10 @@ main {
   0% {
     transform: translate(0, 0);
   }
+
   100% {
-    transform: translate(
-      calc(var(--end-x) - var(--start-x)),
-      calc(var(--end-y) - var(--start-y))
-    );
+    transform: translate(calc(var(--end-x) - var(--start-x)),
+        calc(var(--end-y) - var(--start-y)));
   }
 }
-
-/* Mobile / Portrait Mode */
-@media (max-aspect-ratio: 1/1) or (max-width: 768px) {
-  .split-view {
-    flex-direction: column;
-  }
-}
-
-/* Loader Styles */
-.loader-overlay {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
-  background: #ffffff;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.loader-content {
-  text-align: center;
-  width: 300px;
-}
-
-.spinner {
-  width: 50px;
-  height: 50px;
-  border: 5px solid #f3f3f3;
-  border-top: 5px solid #3498db;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 20px;
-}
-
-.progress-bar {
-  width: 100%;
-  height: 10px;
-  background: #eee;
-  border-radius: 5px;
-  overflow: hidden;
-  margin-top: 10px;
-}
-
-.progress-fill {
-  height: 100%;
-  background: #3498db;
-  transition: width 0.3s ease;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Transition Effect */
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-.fade-leave-to {
-  opacity: 0;
-}
-
-/* Prevent text selection */
-.card-container, .card-image, .hitbox {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-.shake-animation {
-  animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-}
-
-@keyframes shake {
-  10%, 90% { transform: translate3d(-1px, 0, 0); }
-  20%, 80% { transform: translate3d(2px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-  40%, 60% { transform: translate3d(4px, 0, 0); }
-}
-
 </style>
