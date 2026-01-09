@@ -85,16 +85,16 @@ const handleCardClick = async (clickedType, side) => {
     message.value = "Nice match!";
 
     isAnimating.value = true;
-    // const clickedCard = side === 'left' ? cardLeft.value : cardRight.value;
+    const clickedCard = side === 'left' ? cardLeft.value : cardRight.value;
     const otherCard = side === 'left' ? cardRight.value : cardLeft.value;
 
-    animatingCard.value = otherCard;
-    animationDirection.value = side === 'right' ? 'left-to-right' : 'right-to-left';
+    animatingCard.value = clickedCard;
+    animationDirection.value = side === 'left' ? 'left-to-right' : 'right-to-left';
 
     // Computer the exact position of the source card
     await nextTick();
-    const sourceWrapper = side === 'right' ? leftCardWrapper.value : rightCardWrapper.value;
-    const targetWrapper = side === 'right' ? rightCardWrapper.value : leftCardWrapper.value;
+    const sourceWrapper = side === 'left' ? leftCardWrapper.value : rightCardWrapper.value;
+    const targetWrapper = side === 'left' ? rightCardWrapper.value : leftCardWrapper.value;
 
     if (sourceWrapper && targetWrapper) {
       const sourceRect = sourceWrapper.getBoundingClientRect();
@@ -117,9 +117,9 @@ const handleCardClick = async (clickedType, side) => {
     }
 
     if (side === 'left') {
-      cardRight.value = newRandom;
-    } else {
       cardLeft.value = newRandom;
+    } else {
+      cardRight.value = newRandom;
     }
 
     // wait until the animation is over
@@ -127,9 +127,9 @@ const handleCardClick = async (clickedType, side) => {
 
     // Update the other card position
     if (side === 'left') {
-      cardLeft.value = otherCard;
+      cardRight.value = clickedCard;
     } else {
-      cardRight.value = otherCard;
+      cardLeft.value = clickedCard;
     }
 
     // Reset animation states
