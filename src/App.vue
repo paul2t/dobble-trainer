@@ -12,6 +12,8 @@ const cardLeft = ref(null);
 const cardRight = ref(null);
 const startTime = ref(null);
 const currentTime = ref(null);
+const mistakes = ref(0);
+const isShaking = ref(false);
 
 // Animation states
 const animatingCard = ref(null);
@@ -22,6 +24,12 @@ const animationStyle = ref({}); // For positioning the card exactly
 // Refs for the wrappers
 const leftCardWrapper = ref(null);
 const rightCardWrapper = ref(null);
+
+const accuracy = computed(() => {
+  const totalAttempts = score.value + mistakes.value;
+  if (totalAttempts === 0) return 100;
+  return Math.round((score.value / totalAttempts) * 100);
+});
 
 // Transform JSON into Array
 const deck = Object.keys(rawData)
@@ -108,6 +116,13 @@ const initGame = () => {
   startTimer();
 };
 
+const triggerShake = () => {
+  isShaking.value = true;
+  setTimeout(() => {
+    isShaking.value = false;
+  }, 300); // Duration of the animation
+};
+
 const handleCardClick = async (clickedType, side) => {
   if (isAnimating.value) return;
 
@@ -115,6 +130,7 @@ const handleCardClick = async (clickedType, side) => {
   const rightHasIt = cardRight.value.symbols.some(s => s.type === clickedType);
 
   if (leftHasIt && rightHasIt) {
+    isShaking.value = false;
     score.value++;
     message.value = "Nice match!";
 
@@ -210,9 +226,17 @@ onUnmounted(() => {
             <span class="label">SPEED</span>
             <span class="value">{{ cardsPerMinute }} <small>CPM</small></span>
           </div>
+          <div class="stat-item">
+            <span class="label">ACCURACY</span>
+            <span class="value">{{ accuracy }}%</span>
+          </div>
           <div class="stat-item score-main">
             <span class="label">SCORE</span>
             <span class="value">{{ score }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">MISTAKES</span>
+            <span class="value error-text">{{ mistakes }}</span>
           </div>
           <div class="stat-item">
             <span class="label">TIME</span>
@@ -224,7 +248,7 @@ onUnmounted(() => {
     </header>
 
     <main v-if="!isLoading && cardLeft && cardRight">
-      <div class="split-view">
+      <div class="split-view" :class="{ 'shake-animation': isShaking }">
         <div
           ref="leftCardWrapper"
           class="card-wrapper"
@@ -472,8 +496,23 @@ main {
   font-size: 2rem;
 }
 
+.error-text {
+  color: #e74c3c !important;
+}
+
 small {
   font-size: 0.8rem;
   font-weight: normal;
+}
+
+.shake-animation {
+  animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 </style>
