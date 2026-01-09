@@ -243,7 +243,7 @@ onUnmounted(() => {
             <span class="value">{{ formatTime }}</span>
           </div>
         </div>
-        <span class="msg">{{ message }}</span>
+        <!-- <span class="msg">{{ message }}</span> -->
       </div>
     </header>
 
