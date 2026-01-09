@@ -1,12 +1,15 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import DobbleCard from './components/DobbleCard.vue';
+import StatsBar from './components/StatsBar.vue';
+import { useTimer } from './composables/useTimer';
 import rawData from './data/cards.json';
 
 // --- STATE ---
 const isLoading = ref(true);
 const loadingProgress = ref(0);
 const score = ref(0);
+const scoreUnPaused = ref(0);
 const message = ref("Find the matching symbol!");
 const cardLeft = ref(null);
 const cardRight = ref(null);
@@ -22,12 +25,6 @@ const animationStyle = ref({}); // For positioning the card exactly
 // Refs for the wrappers
 const leftCardWrapper = ref(null);
 const rightCardWrapper = ref(null);
-
-const accuracy = computed(() => {
-  const totalAttempts = score.value + mistakes.value;
-  if (totalAttempts === 0) return 100;
-  return Math.round((score.value / totalAttempts) * 100);
-});
 
 // Transform JSON into Array
 const deck = Object.keys(rawData)
@@ -65,6 +62,9 @@ const preloadImages = async () => {
   }
 };
 
+// --- Timer Management ---
+const { isPaused, totalElapsedMs, toggleTimer, stopTimer } = useTimer();
+
 // --- GAME LOGIC ---
 const getRandomCard = () => {
   const randomIndex = Math.floor(Math.random() * deck.length);
@@ -74,83 +74,12 @@ const getRandomCard = () => {
   };
 };
 
-const isPaused = ref(true);
-const accumulatedTime = ref(0);
-const startTime = ref(null);
-const currentTime = ref(null);
-let timerInterval = null;
-
-// Calculate Cards Per Minute (CPM)
-const cardsPerMinute = computed(() => {
-  // 1. Calculate total elapsed milliseconds exactly like the timer does
-  let totalMs = accumulatedTime.value;
-  if (!isPaused.value && startTime.value && currentTime.value) {
-    totalMs += (currentTime.value - startTime.value);
-  }
-
-  // 2. Prevent division by zero or calculation if no time/matches yet
-  // Wait 3 seconds for a stable reading
-  if (totalMs < 3000 || score.value === 0) return 0;
-
-  // 3. Convert ms to minutes
-  const totalMinutes = totalMs / 1000 / 60;
-  
-  // 4. Return CPM (Matches / Minutes)
-  return (score.value / totalMinutes).toFixed(1);
-});
-
-// Timer update function
-const startTimer = () => {
-  currentTime.value = Date.now();
-  startTime.value = Date.now();
-  if (timerInterval) clearInterval(timerInterval);
-
-  timerInterval = setInterval(() => {
-    currentTime.value = Date.now();
-  }, 1000); // Update every 100ms for a smooth counter
-};
-
-const toggleTimer = () => {
-  if (isLoading.value) return; // Don't allow pausing during load
-
-  isPaused.value = !isPaused.value;
-
-  if (isPaused.value) {
-    // PAUSING: Stop the interval and save the elapsed time
-    clearInterval(timerInterval);
-    accumulatedTime.value += Date.now() - startTime.value;
-    startTime.value = null;
-    console.log("accumulatedTime.value", accumulatedTime.value);
-  } else {
-    // RESUMING: Start a new reference point
-    startTimer();
-  }
-};
-
-const formatTime = computed(() => {
-  let totalMs = accumulatedTime.value;
-  console.log("totalMs",totalMs);
-  if (!isPaused.value && startTime.value && currentTime.value) {
-    totalMs += (currentTime.value - startTime.value);
-    console.log("totalMs",totalMs, startTime.value);
-  }
-  
-  const seconds = Math.floor(totalMs / 1000);
-  console.log(seconds);
-  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
-  const s = (seconds % 60).toString().padStart(2, '0');
-  console.log(m, s);
-  return `${m}:${s}`;
-});
-
 const initGame = () => {
   let c1 = getRandomCard();
   let c2 = getRandomCard();
   while (c1.id === c2.id) { c2 = getRandomCard(); }
   cardLeft.value = c1;
   cardRight.value = c2;
-
-  startTimer();
 };
 
 const triggerShake = () => {
@@ -169,6 +98,8 @@ const handleCardClick = async (clickedType, side) => {
   if (leftHasIt && rightHasIt) {
     isShaking.value = false;
     score.value++;
+    if (!isPaused.value)
+      scoreUnPaused.value++;
     message.value = "Nice match!";
 
     isAnimating.value = true;
@@ -236,7 +167,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  if (timerInterval) clearInterval(timerInterval);
+  stopTimer();
 });
 </script>
 
@@ -258,28 +189,14 @@ onUnmounted(() => {
     <header v-if="!isLoading">
       <!-- <h1>Dobble Trainer</h1> -->
       <div class="stats">
-        <div class="stats-bar">
-          <div class="stat-item">
-            <span class="label">SPEED</span>
-            <span class="value">{{ cardsPerMinute }} <small>CPM</small></span>
-          </div>
-          <div class="stat-item">
-            <span class="label">ACCURACY</span>
-            <span class="value">{{ accuracy }}%</span>
-          </div>
-          <div class="stat-item score-main">
-            <span class="label">SCORE</span>
-            <span class="value">{{ score }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="label">MISTAKES</span>
-            <span class="value error-text">{{ mistakes }}</span>
-          </div>
-          <div class="stat-item clickable" @click="toggleTimer">
-            <span class="label">TIME</span>
-            <span class="value timer-display">{{ formatTime }}</span>
-          </div>
-        </div>
+        <StatsBar 
+          :score="score"
+          :score-un-paused="scoreUnPaused"
+          :mistakes="mistakes"
+          :is-paused="isPaused"
+          :elapsed-ms="totalElapsedMs"
+          @toggle-pause="toggleTimer"
+        />
         <!-- <span class="msg">{{ message }}</span> -->
       </div>
     </header>
@@ -349,13 +266,6 @@ header {
   flex: 0 0 auto;
   text-align: center;
   margin-bottom: 10px;
-}
-
-.score {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #2c3e50;
-  display: block;
 }
 
 .msg {
@@ -498,51 +408,6 @@ main {
   user-select: none;
 }
 
-.stats-bar {
-  display: flex;
-  justify-content: space-around;
-  align-items: center;
-  background: white;
-  padding: 15px;
-  border-radius: 12px;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-  margin-bottom: 10px;
-  user-select: none;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-  text-align: center;
-}
-
-.stat-item .label {
-  font-size: 0.7rem;
-  color: #888;
-  letter-spacing: 1px;
-  font-weight: bold;
-}
-
-.stat-item .value {
-  font-size: 1.4rem;
-  font-weight: 800;
-  color: #2c3e50;
-}
-
-.score-main .value {
-  color: #3498db;
-  font-size: 2rem;
-}
-
-.error-text {
-  color: #e74c3c !important;
-}
-
-small {
-  font-size: 0.8rem;
-  font-weight: normal;
-}
-
 .shake-animation {
   animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
 }
@@ -552,19 +417,6 @@ small {
   20%, 80% { transform: translate3d(2px, 0, 0); }
   30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
   40%, 60% { transform: translate3d(4px, 0, 0); }
-}
-
-.clickable {
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-.clickable:hover {
-  opacity: 0.7;
-}
-
-.timer-display {
-  font-family: monospace; /* Keeps numbers from jumping */
-  color: #3498db;
 }
 
 </style>
