@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
 import DobbleCard from './components/DobbleCard.vue';
 import rawData from './data/cards.json';
 
@@ -10,6 +10,8 @@ const score = ref(0);
 const message = ref("Find the matching symbol!");
 const cardLeft = ref(null);
 const cardRight = ref(null);
+const startTime = ref(null);
+const currentTime = ref(null);
 
 // Animation states
 const animatingCard = ref(null);
@@ -66,12 +68,44 @@ const getRandomCard = () => {
   };
 };
 
+// Calculate Cards Per Minute (CPM)
+const cardsPerMinute = computed(() => {
+  if (!startTime.value || !currentTime.value || score.value === 0) return 0;
+  
+  const elapsedSeconds = (currentTime.value - startTime.value) / 1000;
+  if (elapsedSeconds < 3) return 0; // Wait 3 seconds for a stable reading
+  
+  const elapsedMinutes = elapsedSeconds / 60;
+  return (score.value / elapsedMinutes).toFixed(1);
+});
+
+let timerInterval = null;
+// Timer update function
+const startTimer = () => {
+  startTime.value = Date.now();
+  if (timerInterval) clearInterval(timerInterval);
+
+  timerInterval = setInterval(() => {
+    currentTime.value = Date.now();
+  }, 1000); // Update every 100ms for a smooth counter
+};
+
+const formatTime = computed(() => {
+  if (!startTime.value || !currentTime.value) return "00:00";
+  const seconds = Math.floor((currentTime.value - startTime.value) / 1000);
+  const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+  const s = (seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+});
+
 const initGame = () => {
   let c1 = getRandomCard();
   let c2 = getRandomCard();
   while (c1.id === c2.id) { c2 = getRandomCard(); }
   cardLeft.value = c1;
   cardRight.value = c2;
+
+  startTimer();
 };
 
 const handleCardClick = async (clickedType, side) => {
@@ -138,12 +172,18 @@ const handleCardClick = async (clickedType, side) => {
     isAnimating.value = false;
     animationStyle.value = {};
   } else {
+    mistakes.value++;
     message.value = "No match there!";
+    triggerShake();
   }
 };
 
 onMounted(() => {
   preloadImages();
+});
+
+onUnmounted(() => {
+  if (timerInterval) clearInterval(timerInterval);
 });
 </script>
 
@@ -165,7 +205,20 @@ onMounted(() => {
     <header v-if="!isLoading">
       <h1>Dobble Trainer</h1>
       <div class="stats">
-        <span class="score">Score: {{ score }}</span>
+        <div class="stats-bar">
+          <div class="stat-item">
+            <span class="label">SPEED</span>
+            <span class="value">{{ cardsPerMinute }} <small>CPM</small></span>
+          </div>
+          <div class="stat-item score-main">
+            <span class="label">SCORE</span>
+            <span class="value">{{ score }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="label">TIME</span>
+            <span class="value">{{ formatTime }}</span>
+          </div>
+        </div>
         <span class="msg">{{ message }}</span>
       </div>
     </header>
@@ -382,5 +435,45 @@ main {
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
+}
+
+.stats-bar {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  margin-bottom: 10px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+
+.stat-item .label {
+  font-size: 0.7rem;
+  color: #888;
+  letter-spacing: 1px;
+  font-weight: bold;
+}
+
+.stat-item .value {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #2c3e50;
+}
+
+.score-main .value {
+  color: #3498db;
+  font-size: 2rem;
+}
+
+small {
+  font-size: 0.8rem;
+  font-weight: normal;
 }
 </style>
