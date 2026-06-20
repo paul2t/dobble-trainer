@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import DobbleCard from './components/DobbleCard.vue';
 import StatsBar from './components/StatsBar.vue';
+import PlayerScoreBar from './components/PlayerScoreBar.vue';
 import { useTimer } from './composables/useTimer';
 import rawData from './data/cards.json';
 
@@ -15,6 +16,16 @@ const cardLeft = ref(null);
 const cardRight = ref(null);
 const mistakes = ref(0);
 const isShaking = ref(false);
+
+// --- TWO-PLAYER STATE ---
+const WIN_SCORE = 10;
+const playerCount = ref(1); // 1 or 2
+// index 0 = top player (left card), index 1 = bottom player (right card)
+const players = ref([
+  { score: 0, mistakes: 0 },
+  { score: 0, mistakes: 0 },
+]);
+const winner = ref(null); // null while playing, else 0 or 1
 
 // Animation states
 const animatingCard = ref(null);
@@ -89,17 +100,57 @@ const triggerShake = () => {
   }, 300); // Duration of the animation
 };
 
+// Two-player scoring map (cards are stacked, screen in default orientation):
+// bottom card (right slot) = Player 1 (index 0),
+// top card (left slot)     = Player 2 (index 1).
+const playerIndexForSide = (side) => (side === 'left' ? 1 : 0);
+
+const resetTwoPlayer = () => {
+  players.value = [
+    { score: 0, mistakes: 0 },
+    { score: 0, mistakes: 0 },
+  ];
+  winner.value = null;
+  message.value = "Race to " + WIN_SCORE + "!";
+  initGame();
+};
+
+const setPlayerCount = (n) => {
+  playerCount.value = n;
+  if (n === 2) {
+    resetTwoPlayer();
+  } else {
+    score.value = 0;
+    scoreUnPaused.value = 0;
+    mistakes.value = 0;
+    winner.value = null;
+    message.value = "Find the matching symbol!";
+    initGame();
+  }
+};
+
+const toggleMode = () => {
+  setPlayerCount(playerCount.value === 1 ? 2 : 1);
+};
+
 const handleCardClick = async (clickedType, side) => {
   if (isAnimating.value) return;
+  if (playerCount.value === 2 && winner.value !== null) return;
 
   const leftHasIt = cardLeft.value.symbols.some(s => s.type === clickedType);
   const rightHasIt = cardRight.value.symbols.some(s => s.type === clickedType);
+  const twoPlayer = playerCount.value === 2;
+  const pIdx = playerIndexForSide(side);
 
   if (leftHasIt && rightHasIt) {
     isShaking.value = false;
-    score.value++;
-    if (!isPaused.value)
-      scoreUnPaused.value++;
+    if (twoPlayer) {
+      players.value[pIdx].score++;
+    } else {
+      score.value++;
+      if (!isPaused.value)
+        scoreUnPaused.value++;
+    }
     message.value = "Nice match!";
 
     isAnimating.value = true;
@@ -161,8 +212,18 @@ const handleCardClick = async (clickedType, side) => {
     animationDirection.value = null;
     isAnimating.value = false;
     animationStyle.value = {};
+
+    // Declare a winner once the round (and its animation) has resolved.
+    if (twoPlayer && players.value[pIdx].score >= WIN_SCORE) {
+      winner.value = pIdx;
+    }
   } else {
-    mistakes.value++;
+    if (twoPlayer) {
+      players.value[pIdx].mistakes++;
+      players.value[pIdx].score = Math.max(0, players.value[pIdx].score - 1);
+    } else {
+      mistakes.value++;
+    }
     message.value = "No match there!";
     triggerShake();
   }
@@ -192,10 +253,15 @@ onUnmounted(() => {
       </div>
     </Transition>
 
-    <header v-if="!isLoading">
-      <!-- <h1>Dobble Trainer</h1> -->
+    <!-- Mode toggle: switch between 1 and 2 players -->
+    <button v-if="!isLoading" class="mode-toggle" @click="toggleMode">
+      {{ playerCount === 1 ? '2P' : '1P' }}
+    </button>
+
+    <!-- Single-player stats bar -->
+    <header v-if="!isLoading && playerCount === 1">
       <div class="stats">
-        <StatsBar 
+        <StatsBar
           :score="score"
           :score-un-paused="scoreUnPaused"
           :mistakes="mistakes"
@@ -203,12 +269,25 @@ onUnmounted(() => {
           :elapsed-ms="totalElapsedMs"
           @toggle-pause="toggleTimer"
         />
-        <!-- <span class="msg">{{ message }}</span> -->
       </div>
     </header>
 
+    <!-- Two-player: top player (Player 2), bar rotated to face them -->
+    <PlayerScoreBar
+      v-if="!isLoading && playerCount === 2"
+      label="PLAYER 2"
+      :score="players[1].score"
+      :mistakes="players[1].mistakes"
+      :target="WIN_SCORE"
+      :rotated="true"
+      :is-winner="winner === 1"
+    />
+
     <main v-if="!isLoading && cardLeft && cardRight">
-      <div class="split-view" :class="{ 'shake-animation': isShaking }">
+      <div
+        class="split-view"
+        :class="{ 'shake-animation': isShaking, 'force-column': playerCount === 2 }"
+      >
         <div
           ref="leftCardWrapper"
           class="card-wrapper"
@@ -244,6 +323,24 @@ onUnmounted(() => {
         </div>
       </div>
     </main>
+
+    <!-- Two-player: bottom player (Player 1), default screen orientation -->
+    <PlayerScoreBar
+      v-if="!isLoading && playerCount === 2"
+      label="PLAYER 1"
+      :score="players[0].score"
+      :mistakes="players[0].mistakes"
+      :target="WIN_SCORE"
+      :is-winner="winner === 0"
+    />
+
+    <!-- Winner overlay -->
+    <div v-if="!isLoading && playerCount === 2 && winner !== null" class="winner-overlay">
+      <div class="winner-card">
+        <h2>Player {{ winner + 1 }} wins! 🏆</h2>
+        <button class="play-again" @click="resetTwoPlayer">Play again</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -350,6 +447,71 @@ main {
   .split-view {
     flex-direction: column;
   }
+}
+
+/* Two-player always stacks the cards so players face each other */
+.split-view.force-column {
+  flex-direction: column;
+}
+
+/* Mode toggle button */
+.mode-toggle {
+  position: fixed;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  z-index: 1100;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: #3498db;
+  color: white;
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+.mode-toggle:active {
+  transform: translateY(-50%) scale(0.92);
+}
+
+/* Winner overlay */
+.winner-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1200;
+}
+
+.winner-card {
+  background: white;
+  padding: 30px 40px;
+  border-radius: 16px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.winner-card h2 {
+  margin: 0 0 20px;
+  color: #2c3e50;
+}
+
+.play-again {
+  padding: 12px 28px;
+  border: none;
+  border-radius: 10px;
+  background: #2ecc71;
+  color: white;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.play-again:active {
+  transform: scale(0.96);
 }
 
 /* Loader Styles */
