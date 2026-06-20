@@ -253,9 +253,28 @@ onUnmounted(() => {
       </div>
     </Transition>
 
-    <!-- Mode toggle: switch between 1 and 2 players -->
-    <button v-if="!isLoading" class="mode-toggle" @click="toggleMode">
-      {{ playerCount === 1 ? '2P' : '1P' }}
+    <!-- Mode toggle: switch between 1 and 2 players.
+         Shows the icon for the mode you'll switch to. -->
+    <button
+      v-if="!isLoading"
+      class="mode-toggle"
+      @click="toggleMode"
+      :aria-label="playerCount === 1 ? 'Switch to two players' : 'Switch to one player'"
+    >
+      <!-- Two players (tap to enter 2P) -->
+      <svg v-if="playerCount === 1" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+      <!-- One player (tap to return to 1P) -->
+      <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
+      </svg>
     </button>
 
     <!-- Single-player stats bar -->
@@ -457,23 +476,28 @@ main {
 /* Mode toggle button */
 .mode-toggle {
   position: fixed;
-  top: 50%;
-  right: 8px;
-  transform: translateY(-50%);
+  top: 10px;
+  right: 10px;
   z-index: 1100;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
   border: none;
   background: #3498db;
   color: white;
-  font-weight: 800;
-  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   cursor: pointer;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
+.mode-toggle svg {
+  width: 22px;
+  height: 22px;
+}
 .mode-toggle:active {
-  transform: translateY(-50%) scale(0.92);
+  transform: scale(0.92);
 }
 
 /* Winner overlay */
