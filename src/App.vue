@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import DobbleCard from './components/DobbleCard.vue';
 import StatsBar from './components/StatsBar.vue';
 import { useTimer } from './composables/useTimer';
@@ -104,13 +104,11 @@ const handleCardClick = async (clickedType, side) => {
 
     isAnimating.value = true;
     const clickedCard = side === 'left' ? cardLeft.value : cardRight.value;
-    const otherCard = side === 'left' ? cardRight.value : cardLeft.value;
 
-    animatingCard.value = clickedCard;
-    animationDirection.value = side === 'left' ? 'left-to-right' : 'right-to-left';
-
-    // Computer the exact position of the source card
-    await nextTick();
+    // Measure the source/target positions from the CURRENT DOM, BEFORE the
+    // overlay is shown. Swapping the card content doesn't change the wrapper
+    // geometry, so measuring up-front is safe and avoids a frame where the
+    // overlay renders without its positioning variables.
     const sourceWrapper = side === 'left' ? leftCardWrapper.value : rightCardWrapper.value;
     const targetWrapper = side === 'left' ? rightCardWrapper.value : leftCardWrapper.value;
 
@@ -128,11 +126,19 @@ const handleCardClick = async (clickedType, side) => {
       };
     }
 
-    // show the new card
+    // Pick the new card (distinct from both currently displayed cards).
     let newRandom = getRandomCard();
     while (newRandom.id === cardLeft.value.id || newRandom.id === cardRight.value.id) {
       newRandom = getRandomCard();
     }
+
+    // Show the overlay AND swap the clicked slot to the new card in the same
+    // synchronous batch. Because animationStyle is already set, the overlay
+    // renders with valid coordinates on its first frame (it slides), and the
+    // clicked slot never lingers on the old card — preventing the duplicated
+    // "same card twice" glitch.
+    animatingCard.value = clickedCard;
+    animationDirection.value = side === 'left' ? 'left-to-right' : 'right-to-left';
 
     if (side === 'left') {
       cardLeft.value = newRandom;
