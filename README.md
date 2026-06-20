@@ -9,6 +9,7 @@ A speed-training web app for the Dobble card game. Two cards are shown side by s
 - **Smooth animations** — matched card slides across to its new position
 - **Responsive layout** — side-by-side on landscape, stacked on portrait/mobile
 - **Image preloader** — all card images load upfront with a progress bar
+- **Offline-ready (PWA)** — a service worker precaches the app and every card image on first visit, so after that the game runs with no network. Installable to home screen/desktop.
 
 ## Tech stack
 
